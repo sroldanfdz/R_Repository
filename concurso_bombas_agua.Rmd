@@ -1,0 +1,456 @@
+---
+title: "CONCURSO BOMBAS DE AGUA"
+author: "Sergio Roldán Fernández"
+date: "14/07/2020"
+output:
+  html_document:
+    df_print: paged
+    toc_depth: 3
+    number_sections: true
+    theme: yeti
+    highlight: tango
+    code_folding: hide
+    fig_width: 9
+    fig_heigth: 7
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+---
+
+La dirección web del concurso puede encontrarse pinchando [aquí](https://www.drivendata.org/competitions/7/pump-it-up-data-mining-the-water-table/)
+
+El objetivo es determinar el estado de unas bombas de agua a partir de unas 40 variables. La descripción de las variables es la siguiente:
+
+* amount_tsh: Cantidad de agua disponible para la bomba.
+* date_recorded: Fecha de registro.
+* funder: Quién financio el pozo.
+* gps_height: Altitud a la que se encuentra el pozo.
+* installer: Organización/empresa que instaló el pozo.
+* longitude: Longitud.
+* latitude: Latitud.
+* wpt_name: Nombre del punto de agua (si lo hay).
+* num_private:
+* basin: Cuenca geográfica.
+* subvillage: Localización geográfica.
+* region: Región geográfica.
+* region_code: Ubicación geográfica (código región).
+* district_code: Ubicación geográfica (código distrito).
+* lga: Ubicación geográfica.
+* ward: Ubicación geográfica (sala).
+* population: Población alrededor del pozo.
+* public_meeting: True/False.
+* recorded_by: Grupo que realiza el registro.
+* scheme_management: Quién opera la bomba de agua.
+* scheme_name: Quién opera la bomba de agua.
+* permit: Si la bomba de agua está permitida.
+* construction_year: Año de construcción de la bomba de agua.
+* extraction_type: Tipo de extracción que usa la bomba de agua.
+* extraction_type_group: Tipo de extracción que usa la bomba de agua.
+* extraction_type_class: Tipo de extracción que usa la bomba de agua.
+* management: Cómo se gestiona la bomba de agua.
+* management_group: Cómo se gestiona la bomba de agua.
+* payment: Lo que cuesta el agua.
+* payment_type: Lo que cuesta el agua.
+* water_quality: Calidad del agua.
+* quality_group: Calidad del agua.
+* quantity: Cantidad.
+* quantity_group: Cantidad.
+* source: La fuente del agua.
+* source_type: La fuente del agua.
+* source_class: La fuente del agua.
+* waterpoint_type: El tipo de bomba de agua.
+* waterpoint_type_group: El tipo de bomba de agua.
+
+La variable objetivo tiene tres valores posibles:
+
+* functional: La bomba de agua está operativa y no se necesitan reparaciones.
+* functional needs repair: La bomba de agua está operativa pero necesita reparación.
+* non functional: La bomba de agua no está operativa.
+
+
+Se obtiene una predicción del 0.8209.
+
+# - Carga de librerías y datos
+
+```{r librerias2, message=FALSE, warning=FALSE, layout="l-body"}
+
+# Borrar espacio de trabajo
+rm(list = ls())
+
+# Carga de librerías
+suppressPackageStartupMessages({
+  library(data.table)
+  library(dplyr)
+  library(caret)
+  library(scales)
+  library(ggplot2)
+  library(stringi)
+  library(stringr)
+  library(dataPreparation)
+  library(knitr)
+  library(kableExtra)
+  library(ggpubr)
+  library(tictoc)
+  library(lubridate)
+  library(inspectdf)
+  library(ranger)
+  library(MLmetrics)
+  library(h2o)
+})
+```
+
+
+Cargo los datos train y las etiquetas (variable objetivo). Como ambos Datasets tienen en común la columna "id" hago un inner join de ambos Datasets a través de esa columna. Así Consigo el Dataset "datos_Train". También cargo los datos test en "datos_Test".
+
+```{r datos2, message=FALSE, warning=FALSE, layout = "l-body"}
+
+# Carga de datos Train
+datIn <- fread(file = "DatosTrain.csv", nThread = 2)
+Etiquetas <- fread(file = "EtiquetasDatosTrain.csv", nThread = 2)
+datos_Train <-merge(x = datIn, y = Etiquetas, by = "id", all.x = TRUE) # Unión de ambos Datasets en uno.
+
+# Carga de datos Test
+datos_Test <- fread(file = "DatosTest.csv", nThread = 2)
+```
+
+
+# - Limpieza de datos
+
+## - Datos Train
+
+
+Primero realizo un sutil análisis exploratorio de los datos.
+
+```{r}
+str(datos_Train)
+```
+
+Se observa que hay muchas variables (40 independientes). Muchas de ellas contienen información repetida. Es por ello que siguiendo la definición de las variables pasaré a eliminar aquellas con información repetida. No obstane, hago un recuento de los niveles de las variables tipo character.
+
+```{r}
+# Cuento los niveles de las variables tipo character
+sapply(Filter(is.character, datos_Train),function(x) length(unique(x)))
+```
+
+Borro las variables con información repetida  y también variables que no considero que sean relevantes. Como por ejemplo los identificadores. En las variables que repiten información intento quedarme con aquellas que tienen un mayor número de niveles para una mayor discriminación.
+
+```{r}
+# Variables geográficas que se infieren con las variables de la latitud y longitud.
+datos_Train$wpt_name <- NULL
+datos_Train$subvillage <- NULL
+datos_Train$lga <- NULL
+datos_Train$ward <- NULL
+datos_Train$region_code <- NULL
+datos_Train$district_code <- NULL
+
+
+# Sólamente tiene un único valor. No puede ayudar a discriminar
+datos_Train$recorded_by <- NULL
+
+# Identificador
+datos_Train$id <- NULL
+
+# Variables con información repetida
+datos_Train$scheme_name <- NULL
+datos_Train$extraction_type_class <- NULL
+datos_Train$extraction_type_group <- NULL
+datos_Train$management_group <- NULL
+datos_Train$payment_type <- NULL
+datos_Train$quality_group <- NULL
+datos_Train$quantity_group <- NULL
+datos_Train$source_type <- NULL
+datos_Train$source_class <- NULL
+datos_Train$waterpoint_type_group <- NULL
+
+# Variables sin información
+datos_Train$num_private <- NULL
+datos_Train$permit <- NULL
+
+# Variables con demasiados niveles
+datos_Train$date_recorded <- NULL # Es la fecha de registro
+datos_Train$funder <- NULL
+datos_Train$installer <- NULL
+datos_Train$scheme_management <- NULL
+
+str(datos_Train)
+```
+
+R ha inferido muchas variables que se suponen categóricas como tipo character. A continuación, cambio las variables tipo character a factor.
+
+```{r}
+datos_Train[,c(5,6,8,10:17)] <- lapply(datos_Train[,c(5,6,8,10:17)], factor)
+```
+
+
+## - Datos Test
+
+
+Realizo la misma limpieza inicial en los datos test.
+
+```{r}
+# Variables geográficas que se infieren con las variables de la latitud y longitud.
+datos_Test$wpt_name <- NULL
+datos_Test$subvillage <- NULL
+datos_Test$lga <- NULL
+datos_Test$ward <- NULL
+datos_Test$region_code <- NULL
+datos_Test$district_code <- NULL
+
+
+# Sólamente tiene un único valor. No puede ayudar a discriminar
+datos_Test$recorded_by <- NULL
+
+
+# Variables con información repetida
+datos_Test$scheme_name <- NULL
+datos_Test$extraction_type_class <- NULL
+datos_Test$extraction_type_group <- NULL
+datos_Test$management_group <- NULL
+datos_Test$payment_type <- NULL
+datos_Test$quality_group <- NULL
+datos_Test$quantity_group <- NULL
+datos_Test$source_type <- NULL
+datos_Test$source_class <- NULL
+datos_Test$waterpoint_type_group <- NULL
+
+# Variables sin información
+datos_Test$num_private <- NULL
+datos_Test$permit <- NULL
+
+# Variables con demasiados niveles
+datos_Test$date_recorded <- NULL # Es la fecha de registro
+datos_Test$funder <- NULL
+datos_Test$installer <- NULL
+datos_Test$scheme_management <- NULL
+
+str(datos_Test)
+```
+Paso a factor las variables tipo character.
+
+```{r}
+# Paso a factores
+datos_Test[,c(6,7,9,11:17)] <- lapply(datos_Test[,c(6,7,9,11:17)], factor)
+```
+
+
+# - Análisis exploratorio de datos (EDA)
+
+## - Datos Train
+
+```{r eda_Train}
+# Plot categoricas
+x <- inspect_cat(datos_Train)
+show_plot(x)
+
+# Plot Correlaciones en columnas numéricas
+x <- inspect_cor(datos_Train)
+show_plot(x)
+
+# Plot desbalanceo de la variable a predecir
+x <- inspect_imb(datos_Train)
+show_plot(x)
+
+# Plot memoria usada
+x <- inspect_mem(datos_Train)
+show_plot(x)
+
+#Plot datos perdidos
+x <- inspect_na(datos_Train)
+show_plot(x)
+
+# Histogramas para columnas numéricas
+x <- inspect_num(datos_Train)
+show_plot(x)
+
+# Plot de tipos de columnas
+x <- inspect_types(datos_Train)
+show_plot(x)
+```
+
+El EDA revela que:
+
+ * Hay pocas variables con múltiples categorías.
+ 
+ * Respecto a las correlaciones hay cierta correlación positiva entre:  el año de construcción y la altitud a la que está el pozo. Ambas cerca del 65% de correlación. El problema esta en que la variable que indica el año de construcción tiene muchos valores como "0". Hay que proceder a hacer algo con esos valores. También hay cierta correlación entre la latitud y la longitud.
+
+  * Public_Meeting tiene ciertos valores NA (5%)
+  
+  * Además de en construction_year, también hay valores atípicos en la longitud.
+  
+  
+  * Respecto a la variable objetivo el 50% de las bombas de agua tienen la etiqueta de functional. Es decir, la bomba de agua funciona correctamente y no necesita ningún tipo de reparación.
+
+
+## - Datos test
+
+```{r eda_Test}
+# Plot categoricas
+x <- inspect_cat(datos_Test)
+show_plot(x)
+
+# Plot Correlaciones en columnas numéricas
+x <- inspect_cor(datos_Test)
+show_plot(x)
+
+# Plot desbalanceo de la variable a predecir
+x <- inspect_imb(datos_Test)
+show_plot(x)
+
+# Plot memoria usada
+x <- inspect_mem(datos_Test)
+show_plot(x)
+
+#Plot datos perdidos
+x <- inspect_na(datos_Test)
+show_plot(x)
+
+# Histogramas para columnas numéricas
+x <- inspect_num(datos_Test)
+show_plot(x)
+
+# Plot de tipos de columnas
+x <- inspect_types(datos_Test)
+show_plot(x)
+```
+
+El EDA revela que:
+
+ * Sigue las mismas pautas que los datos Train. Tiene las mismas correlaciones, los mismos problemas en las variables del año de construcción y de la longitud. Public_Meeting supone un también un 5% de valores perdidos.
+ 
+
+# - Featuring Engineering
+
+En este apartado voy a realizar la imputación de los valores atípicos en las variables "longitude" y "construction_year" por la mediana. Los valores nulos en la variable "amount_tsh" los imputaré por la media ya que parece que funcionan mejor que con la mediana. Los valores perdidos en "Public_meeting" los imputaré como  TRUE. Después crearé tres variables acorde a las correlaciones que se han visto anteriormente.
+
+
+## - Datos Train
+```{r}
+# Datos Train
+
+# Imputo los años de construcción = 0 por la mediana
+datos_Train$construction_year[datos_Train$construction_year == 0]= median(datos_Train$construction_year[datos_Train$construction_year > 0])
+
+# Imputo las longitudes = 0 por la mediana
+datos_Train$longitude[datos_Train$longitude == 0]= median(datos_Train$longitude[datos_Train$longitude > 0])
+
+# Imputo amount_tsh = 0 por la mediana
+datos_Train$amount_tsh[datos_Train$amount_tsh == 0]= mean(datos_Train$amount_tsh[datos_Train$amount_tsh > 0])
+
+# Imputo valores vacios como TRUE en Public_meeting
+datos_Train$public_meeting[is.na(datos_Train$public_meeting)] <- TRUE
+
+
+# Construcción de 3 variables adiccionales
+datos_Train$lonlat <- sqrt(datos_Train$longitude^2 + datos_Train$latitude^2)
+datos_Train$lonlat2 <- sqrt(datos_Train$longitude^2 * datos_Train$latitude^2)
+datos_Train$year_gps <- (datos_Train$construction_year * datos_Train$gps_height)
+```
+ 
+## - Datos Test
+```{r}
+# Datos Test
+
+# Imputo los años de construcción = 0 por la mediana
+datos_Test$construction_year[datos_Test$construction_year == 0]= median(datos_Test$construction_year[datos_Test$construction_year > 0])
+
+# Imputo las longitudes = 0 por la mediana
+datos_Test$longitude[datos_Test$longitude == 0]= median(datos_Test$longitude[datos_Test$longitude > 0])
+
+# Imputo amount_tsht = 0 por la mediana
+datos_Test$amount_tsh[datos_Test$amount_tsh == 0]= mean(datos_Test$amount_tsh[datos_Test$amount_tsh > 0])
+
+# Imputo valores vacios como TRUE en Public_meeting
+datos_Test$public_meeting[is.na(datos_Test$public_meeting)] <- TRUE
+
+
+# Construcción de 3 variables adiccionales
+datos_Test$lonlat <- sqrt(datos_Test$longitude^2 + datos_Test$latitude^2)
+datos_Test$lonlat2 <- sqrt(datos_Test$longitude^2 * datos_Test$latitude^2)
+datos_Test$year_gps <- (datos_Test$construction_year * datos_Test$gps_height)
+
+# Identificador
+id_Test <- datos_Test$id
+datos_Test$id <- NULL
+```
+
+
+# - Construcción de un modelo
+
+Sigo obtando por el modelo de Random Forest con ranger. Esta vez no creo división entre Train y Test dado que la plataforma ya nos da unos datos Test. Que son sobre los que hay que realizar la predicción y subir a la plataforma para saber si el modelo ajusta bien o mal. Es por ello, que gano unas observaciones más en Train que anteriormente no tenía. Esto hace que el modelo aprenda mas y ajuste mas. También, al tener un mayor número de observaciones y mayor número de variables el número de árboles lo subo hasta 510. Siendo este número el que ha resultado óptimo después de varias pruebas.
+
+```{r rangerdirect2}
+
+set.seed(12345)
+fit <- ranger(
+              status_group ~. ,
+              data = datos_Train,
+              num.trees = 510,
+              importance = 'impurity',
+              write.forest = TRUE,
+              min.node.size = 1,
+              splitrule = "gini",
+              verbose = TRUE,
+              classification = TRUE
+            )
+```
+
+Se aprecia que el modelo tiene un error del 18.67%. Esto deja intuir que ajustará en torno al 0.82.
+
+```{r resultsmodel2}
+fit
+print(fit)
+summary(fit)
+```
+
+
+```{r}
+vars_imp <- fit$variable.importance
+vars_imp <- as.data.frame(vars_imp)
+vars_imp$myvar <- rownames(vars_imp)
+vars_imp <- as.data.table(vars_imp)
+setorder(vars_imp, -vars_imp)
+```
+
+
+Creo el gráfico de importancia de las variables. De 40 variables iniciales se ha reducido todo a unas 19. La mitad aproximadamente.
+
+Las variables que han sido creadas por se puede apreciar que tienen mucho peso en el modelo.
+
+```{r}
+ggbarplot(vars_imp[1:19],
+          x = "myvar", y="vars_imp",
+          color = "blue",
+          palette = "jco",
+          sort.val = "asc",
+          sort.by.groups = FALSE,
+          x.text.angle = 90,
+          ylab = "Importancia",
+          xlab = "Variable",
+          rotate = TRUE,
+          ggtheme = theme_minimal())
+```
+
+
+# - Evaluo el modelo
+
+```{r}
+valor_pred <- predict(fit,data = datos_Test)
+table(valor_pred$predictions)
+```
+
+
+Por último las guardo.
+
+
+```{r guardar predicciones2}
+predicciones <- as.data.frame(valor_pred$predictions)
+predicciones <- cbind(id_Test, predicciones)
+names(predicciones) <- c('id', 'status_group')
+write.csv(predicciones, "predicciones_sergio.csv")
+```
+
+La Predicción obtenida es de 0.8209.
+```{r pressure2, echo=FALSE, fig.cap="Predicción Individual", out.width = '100%'}
+knitr::include_graphics("predict2.jpg")
+```
