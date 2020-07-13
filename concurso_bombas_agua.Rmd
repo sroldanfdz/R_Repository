@@ -377,7 +377,7 @@ datos_Test$id <- NULL
 
 # - Construcción de un modelo
 
-Sigo obtando por el modelo de Random Forest con ranger. Esta vez no creo división entre Train y Test dado que la plataforma ya nos da unos datos Test. Que son sobre los que hay que realizar la predicción y subir a la plataforma para saber si el modelo ajusta bien o mal. Es por ello, que gano unas observaciones más en Train que anteriormente no tenía. Esto hace que el modelo aprenda mas y ajuste mas. También, al tener un mayor número de observaciones y mayor número de variables el número de árboles lo subo hasta 510. Siendo este número el que ha resultado óptimo después de varias pruebas.
+Utilizo el modelo de Random Forest con ranger. Esta vez no creo división entre Train y Test dado que la plataforma ya nos da unos datos Test. Que son sobre los que hay que realizar la predicción y subir a la plataforma para saber si el modelo ajusta bien o mal. Es por ello, que gano unas observaciones más en Train que anteriormente no tenía. Esto hace que el modelo aprenda mas y ajuste mas. También, al tener un mayor número de observaciones y mayor número de variables el número de árboles lo subo hasta 510. Siendo este número el que ha resultado óptimo después de varias pruebas.
 
 ```{r rangerdirect2}
 
