@@ -319,7 +319,7 @@ El EDA revela que:
  * Sigue las mismas pautas que los datos Train. Tiene las mismas correlaciones, los mismos problemas en las variables del año de construcción y de la longitud. Public_Meeting supone un también un 5% de valores perdidos.
  
 
-# - Featuring Engineering
+# - Feature Engineering
 
 En este apartado voy a realizar la imputación de los valores atípicos en las variables "longitude" y "construction_year" por la mediana. Los valores nulos en la variable "amount_tsh" los imputaré por la media ya que parece que funcionan mejor que con la mediana. Los valores perdidos en "Public_meeting" los imputaré como  TRUE. Después crearé tres variables acorde a las correlaciones que se han visto anteriormente.
 
